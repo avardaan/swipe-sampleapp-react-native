@@ -9,6 +9,8 @@ import {
 } from 'react-native';
 
 const SCREEN_WIDTH = Dimensions.get('window').width
+const SWIPE_THRESHOLD = 0.25 * SCREEN_WIDTH
+const SWIPE_OUT_DURATION = 250
 
 class Deck extends Component {
   constructor(props) {
@@ -27,8 +29,20 @@ class Deck extends Component {
       },
       // when user releases finger from the screen
       onPanResponderRelease: (event, gesture) => {
-        // move card to default position
-        this.resetPosition()
+        // if swipe right beyond threshold
+        if (gesture.dx > SWIPE_THRESHOLD) {
+          // console.log("Swipe right")
+          this.forceSwipe('right')
+        }
+        // if swipe left beyond -threshold
+        else if (gesture.dx < -SWIPE_THRESHOLD) {
+          // console.log("Swipe right")
+          this.forceSwipe('left')
+        }
+        else {
+          // move card to default position
+          this.resetPosition()
+        }
       }
     })
     // give component access to panResponder
@@ -49,6 +63,22 @@ class Deck extends Component {
     })
   }
   */
+
+  forceSwipe = (direction) => {
+    // direction value
+    const xValue = (direction === 'right') ? SCREEN_WIDTH : -SCREEN_WIDTH
+    // transition card out of the screen
+    Animated.timing(this.state.position, {
+      toValue: { x: xValue, y: 0 },
+      duration: SWIPE_OUT_DURATION
+    }).start(() => this.onSwipeCompelete(direction))
+  }
+
+  onSwipeCompelete = (direction) => {
+    const { onSwipeLeft, onSwipeRight } = this.props
+    // execute function based on direction
+    (direction === 'right') ? onSwipeRight() : onSwipeLeft()
+  }
 
   resetPosition = () => {
     // move card back to default position
