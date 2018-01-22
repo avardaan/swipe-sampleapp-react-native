@@ -5,7 +5,9 @@ import {
   FlatList,
   PanResponder,
   Animated,
-  Dimensions
+  Dimensions,
+  LayoutAnimation,
+  UIManager,
 } from 'react-native';
 
 const SCREEN_WIDTH = Dimensions.get('window').width
@@ -13,6 +15,12 @@ const SWIPE_THRESHOLD = 0.25 * SCREEN_WIDTH
 const SWIPE_OUT_DURATION = 250
 
 class Deck extends Component {
+  // when component is rendered, it checks here to see if required props were provided
+  static defaultProps = {
+    onSwipeRight: () => {},
+    onSwipeLeft: () => {}
+  }
+
   constructor(props) {
     super(props)
     // default card position
@@ -50,7 +58,8 @@ class Deck extends Component {
     // we can just do this.panResponder = panResponder and then access it
     this.state = {
       panResponder,
-      position
+      position,
+      index: 0,
     }
   }
 
@@ -64,6 +73,17 @@ class Deck extends Component {
   }
   */
 
+  componentWillReceiveProps(nextProps) {
+    if (nextProps.data !== this.props.data) {
+      this.setState({ index: 0 })
+    }
+  }
+
+  componentWillUpdate() {
+    UIManager.setLayoutAnimationEnabledExperimental && UIManager.setLayoutAnimationEnabledExperimental(true)
+    LayoutAnimation.spring()
+  }
+
   forceSwipe = (direction) => {
     // direction value
     const xValue = (direction === 'right') ? SCREEN_WIDTH : -SCREEN_WIDTH
@@ -71,13 +91,17 @@ class Deck extends Component {
     Animated.timing(this.state.position, {
       toValue: { x: xValue, y: 0 },
       duration: SWIPE_OUT_DURATION
-    }).start(() => this.onSwipeCompelete(direction))
+    }).start(() => this.onSwipeComplete(direction))
   }
 
-  onSwipeCompelete = (direction) => {
-    const { onSwipeLeft, onSwipeRight } = this.props
+  onSwipeComplete = (direction) => {
+    const { onSwipeLeft, onSwipeRight, data } = this.props
+    const item = data[this.state.index]
+    // move to next Card
+    this.setState({ index: this.state.index + 1 })
+    this.state.position.setValue({ x: 0, y: 0 })
     // execute function based on direction
-    (direction === 'right') ? onSwipeRight() : onSwipeLeft()
+    direction === 'right' ? onSwipeRight(item) : onSwipeLeft(item)
   }
 
   resetPosition = () => {
@@ -102,29 +126,56 @@ class Deck extends Component {
     }
   }
 
-  render() {
+  // wrapper function to return element from flatlist, much needed
+  renderCards = (item, i) => {
+    console.log("Rendercards was run")
+    // if no items left
+    if (this.state.index >= this.props.data.length) {
+      return this.props.renderNoMoreCards()
+    }
+    // if current state index is higher, don't show previous (already swiped) cards
+    if (i < this.state.index) { return null }
+    // if current state index matches current card in list
+    if (i === this.state.index) {
+      return (
+        <Animated.View
+          {...this.state.panResponder.panHandlers}
+          style={[this.getCardStyle(), styles.cardStyle]}
+        >
+          {this.props.renderCard(item)}
+        </Animated.View>
+      )
+    }
+    // if rest of cards
     return (
-      <View>
+      <Animated.View
+        key={item.id}
+        style={[styles.cardStyle, { top: 10 * (i - this.state.index) }]}
+      >
+        {this.props.renderCard(item)}
+      </Animated.View>
+    )
+  }
+
+  // MYSTERY = passing in state.index to extraData prop of FlatList made it rerender everytime
+
+  render() {
+    console.log("state index is", this.state.index)
+    return (
       <FlatList
-        data={this.props.data}
-        renderItem={({ item, index }) => {
-          if (index === 0) {
-            return (
-              <Animated.View
-                {...this.state.panResponder.panHandlers}
-                style={this.getCardStyle()}
-              >
-                {this.props.renderCard(item)}
-              </Animated.View>
-            )
-          }
-          // if not first card
-          return this.props.renderCard(item)
-        }}
+        data={this.props.data.reverse()}
+        extraData={this.state.index}
+        renderItem={({ item, index }) => this.renderCards(item, index)}
         keyExtractor={(item) => item.id}
       />
-      </View>
     );
+  }
+}
+
+const styles = {
+  cardStyle: {
+    position: 'absolute',
+    width: SCREEN_WIDTH,
   }
 }
 
